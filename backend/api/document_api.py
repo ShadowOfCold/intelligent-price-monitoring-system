@@ -3,12 +3,14 @@ from datetime import datetime
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 from backend.database.dependencies import get_db
 from backend.models.price import Price
 from backend.models.procurement_document import ProcurementDocument
 from backend.schemas.document_schema import ProcurementDocumentResponse
+from backend.utils.datetime_utils import get_current_datetime
 from backend.services.document_service import (
     DOCUMENTS_DIRECTORY,
     parse_procurement_document,
@@ -77,7 +79,7 @@ async def upload_document(
         file_name=file.filename,
         file_type=file_type,
         file_path=str(file_path),
-        uploaded_at=datetime.now(),
+        uploaded_at=get_current_datetime(),
     )
 
     db.add(document)
@@ -150,3 +152,30 @@ def delete_document(
     return {
         "message": "Документ успешно удалён"
     }
+
+@router.get("/download/{document_id}")
+def download_document(
+    document_id: int,
+    db: Session = Depends(get_db)
+):
+    document = db.query(ProcurementDocument).filter(
+        ProcurementDocument.id == document_id
+    ).first()
+
+    if document is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Документ не найден"
+        )
+
+    if not os.path.exists(document.file_path):
+        raise HTTPException(
+            status_code=404,
+            detail="Файл документа не найден"
+        )
+
+    return FileResponse(
+        path=document.file_path,
+        filename=document.file_name,
+        media_type="application/octet-stream"
+    )

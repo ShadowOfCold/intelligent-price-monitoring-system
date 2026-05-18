@@ -5,8 +5,16 @@ from backend.database.dependencies import get_db
 from backend.models.store import Store
 from backend.schemas.store_schema import StoreCreate, StoreResponse
 
-router = APIRouter(prefix="/stores", tags=["Магазины"])
+from urllib.parse import urlparse
 
+def is_valid_url(value: str) -> bool:
+    try:
+        result = urlparse(value)
+        return result.scheme in ("http", "https") and bool(result.netloc)
+    except Exception:
+        return False
+
+router = APIRouter(prefix="/stores", tags=["Магазины"])
 
 @router.post("/", response_model=StoreResponse)
 def create_store(store_data: StoreCreate, db: Session = Depends(get_db)):
@@ -18,6 +26,12 @@ def create_store(store_data: StoreCreate, db: Session = Depends(get_db)):
         raise HTTPException(
             status_code=400,
             detail="Магазин с таким названием уже существует"
+        )
+    
+    if not is_valid_url(store_data.base_url):
+        raise HTTPException(
+            status_code=400,
+            detail="Введите корректный адрес сайта"
         )
 
     store = Store(
@@ -57,6 +71,12 @@ def update_store(
         raise HTTPException(
             status_code=400,
             detail="Магазин с таким названием уже существует"
+        )
+    
+    if not is_valid_url(store_data.base_url):
+        raise HTTPException(
+            status_code=400,
+            detail="Введите корректный адрес сайта"
         )
 
     store.name = store_data.name

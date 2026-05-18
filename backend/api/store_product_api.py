@@ -10,6 +10,16 @@ from backend.schemas.store_product_schema import (
     StoreProductResponse
 )
 
+from urllib.parse import urlparse
+
+
+def is_valid_url(value: str) -> bool:
+    try:
+        result = urlparse(value)
+        return result.scheme in ("http", "https") and bool(result.netloc)
+    except Exception:
+        return False
+
 router = APIRouter(prefix="/store-products", tags=["Карточки товаров"])
 
 
@@ -37,6 +47,12 @@ def create_store_product(
         raise HTTPException(
             status_code=400,
             detail="Карточка товара уже существует"
+        )
+    
+    if not is_valid_url(data.product_url):
+        raise HTTPException(
+            status_code=400,
+            detail="Введите корректную ссылку на страницу товара"
         )
 
     store_product = StoreProduct(
@@ -90,6 +106,12 @@ def update_store_product(
         raise HTTPException(
             status_code=400,
             detail="Карточка товара для выбранного товара и магазина уже существует"
+        )
+    
+    if not is_valid_url(data.product_url):
+        raise HTTPException(
+            status_code=400,
+            detail="Введите корректную ссылку на страницу товара"
         )
 
     store_product.product_id = data.product_id

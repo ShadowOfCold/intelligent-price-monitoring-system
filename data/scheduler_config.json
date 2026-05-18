@@ -1,0 +1,15 @@
+{
+    "enabled": false,
+    "run_times": [
+        "09:00"
+    ],
+    "collect_prices": true,
+    "detect_anomalies": true,
+    "analyze_correlations": true,
+    "generate_forecasts": true,
+    "generate_reports": true,
+    "forecast_days_count": 7,
+    "report_format": "both",
+    "last_run_at": null,
+    "last_result": null
+}
