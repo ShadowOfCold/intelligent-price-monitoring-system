@@ -79,8 +79,10 @@ def render_products_module():
                 set_local_flash_message("product_create", "Товар успешно добавлен")
                 st.rerun()
             else:
-                show_api_error(response, "Ошибка при добавлении товара")
+                set_api_error("product_api_create", response, "Ошибка при добавлении товара")
+                st.rerun()
 
+    show_local_flash_message("product_api_create")
     show_local_flash_message("product_create")
 
     if products:
@@ -154,8 +156,10 @@ def render_products_module():
                     set_local_flash_message("product_edit", "Товар успешно обновлён")
                     st.rerun()
                 else:
-                    show_api_error(response, "Ошибка при обновлении товара")
+                    set_api_error("product_api_edit", response, "Ошибка при обновлении товара")
+                    st.rerun()
 
+        show_local_flash_message("product_api_edit")
         show_local_flash_message("product_edit")
 
         st.divider()
@@ -189,6 +193,8 @@ def render_products_module():
                 set_local_flash_message("product_delete", "Товар успешно удалён")
                 st.rerun()
             else:
-                show_api_error(response, "Ошибка при удалении товара")
+                set_api_error("product_api_delete", response, "Ошибка при удалении товара")
+                st.rerun()
 
+        show_local_flash_message("product_api_delete")
         show_local_flash_message("product_delete")

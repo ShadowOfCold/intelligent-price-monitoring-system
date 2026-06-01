@@ -13,6 +13,8 @@ from backend.api.correlation_api import router as correlation_router
 from backend.api.forecast_api import router as forecast_router
 from backend.api.report_api import router as report_router
 from backend.api.scheduler_api import router as scheduler_router
+from backend.api.market_factor_api import router as market_factor_router
+from backend.api.factor_learning_api import router as factor_learning_router
 from backend.services.scheduler_runtime_service import (
     start_scheduler,
     stop_scheduler,
@@ -33,6 +35,8 @@ app.include_router(correlation_router)
 app.include_router(forecast_router)
 app.include_router(report_router)
 app.include_router(scheduler_router)
+app.include_router(market_factor_router)
+app.include_router(factor_learning_router)
 
 @app.get("/")
 def root():

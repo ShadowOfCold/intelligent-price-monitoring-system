@@ -40,11 +40,15 @@ def render_price_collection_module():
 
                 st.rerun()
             else:
-                show_api_error(
+                set_api_error(
+                    "price_collect_api_all",
                     response,
                     "Ошибка при сборе всех цен"
                 )
 
+                st.rerun()
+
+        show_price_collection_result("price_collect_api_all")
         show_price_collection_result("price_collect_all")
 
         st.divider()
@@ -91,11 +95,15 @@ def render_price_collection_module():
 
                     st.rerun()
                 else:
-                    show_api_error(
+                    set_api_error(
+                        "price_collect_api_product",
                         response,
                         "Ошибка при сборе цен по выбранному товару"
                     )
 
+                    st.rerun()
+
+            show_price_collection_result("price_collect_api_product")
             show_price_collection_result("price_collect_product")
 
             st.divider()
@@ -129,11 +137,15 @@ def render_price_collection_module():
 
                     st.rerun()
                 else:
-                    show_api_error(
+                    set_api_error(
+                        "price_collect_api_store_product",
                         response,
                         "Ошибка при автоматическом сборе цены"
                     )
 
+                    st.rerun()
+
+            show_local_flash_message("price_collect_api_store_product")
             show_local_flash_message("price_collect_store_product")
 
             st.divider()
@@ -180,9 +192,13 @@ def render_price_collection_module():
                         set_local_flash_message("price_create_manual", "Цена успешно добавлена")
                         st.rerun()
                     else:
-                        show_api_error(
+                        set_api_error(
+                            "price_api_create_manual",
                             response,
                             "Ошибка при добавлении цены"
                         )
-            
+
+                        st.rerun()
+
+            show_local_flash_message("price_api_create_manual")
             show_local_flash_message("price_create_manual")

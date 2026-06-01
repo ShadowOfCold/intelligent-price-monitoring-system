@@ -5,7 +5,6 @@ from datetime import datetime
 
 import pandas as pd
 import plotly.express as px
-from openpyxl.chart import LineChart, Reference
 from openpyxl.styles import Alignment
 from openpyxl.utils import get_column_letter
 from reportlab.lib import colors
@@ -30,11 +29,18 @@ from backend.models.price import Price
 from backend.models.price_forecast import PriceForecast
 from backend.models.product import Product
 from backend.models.report import Report
+from backend.models.store_product import StoreProduct
+from backend.models.store import Store
 from backend.utils.datetime_utils import get_current_datetime
 
 REPORTS_DIR = "data/reports"
 FONT_PATH = "backend/assets/fonts/DejaVuSans.ttf"
 FONT_NAME = "DejaVu"
+REPORT_IMAGE_WIDTH = 900
+REPORT_IMAGE_HEIGHT = 430
+REPORT_IMAGE_SCALE = 1
+PDF_IMAGE_WIDTH = 660
+PDF_IMAGE_HEIGHT = 315
 
 
 def ensure_reports_directory():
@@ -99,11 +105,26 @@ def get_product(db: Session, product_id: int):
     return db.query(Product).filter(Product.id == product_id).first()
 
 
+def get_store_product_labels(db: Session, product_id: int) -> dict[int, str]:
+    store_products = (
+        db.query(StoreProduct, Store)
+        .join(Store, StoreProduct.store_id == Store.id)
+        .filter(StoreProduct.product_id == product_id)
+        .all()
+    )
+
+    return {
+        store_product.id: f"{store.name} (карточка #{store_product.id})"
+        for store_product, store in store_products
+    }
+
 def get_prices_dataframe(db: Session, product_id: int):
+    store_product_labels = get_store_product_labels(db, product_id)
+
     prices = (
         db.query(Price)
         .filter(Price.product_id == product_id)
-        .order_by(Price.checked_at)
+        .order_by(Price.store_product_id, Price.checked_at)
         .all()
     )
 
@@ -114,9 +135,13 @@ def get_prices_dataframe(db: Session, product_id: int):
         [
             {
                 "ID": int(price.id),
+                "Карточка товара": store_product_labels.get(
+                    price.store_product_id,
+                    f"Карточка #{price.store_product_id}"
+                ),
+                "ID карточки": int(price.store_product_id) if price.store_product_id else None,
                 "Цена": float(price.price),
                 "Дата": price.checked_at.strftime("%d.%m.%Y %H:%M"),
-                "ID карточки": int(price.store_product_id) if price.store_product_id else None,
                 "ID документа": int(price.document_id) if price.document_id else None,
             }
             for price in prices
@@ -137,12 +162,11 @@ def get_anomalies_dataframe(db: Session, product_id: int):
         return pd.DataFrame()
 
     anomaly_type_map = {
-        "price_outlier": "Нетипичное значение цены",
         "z_score_outlier": "Статистический выброс",
-        "price_spike": "Резкий рост цены",
-        "price_drop": "Резкое падение цены",
+        "unexplained_price_spike": "Необъяснённый рост цены",
+        "unexplained_price_drop": "Необъяснённое падение цены",
+        "factor_explained_change": "Изменение цены, объяснённое внешними факторами",
         "price_fixation": "Длительная фиксация цены",
-        "synchronized_change": "Синхронное изменение цены",
     }
 
     risk_level_map = {
@@ -212,10 +236,12 @@ def get_correlations_dataframe(db: Session, product_id: int):
 
 
 def get_forecasts_dataframe(db: Session, product_id: int):
+    store_product_labels = get_store_product_labels(db, product_id)
+
     forecasts = (
         db.query(PriceForecast)
         .filter(PriceForecast.product_id == product_id)
-        .order_by(PriceForecast.forecast_date)
+        .order_by(PriceForecast.store_product_id, PriceForecast.forecast_date)
         .all()
     )
 
@@ -226,6 +252,10 @@ def get_forecasts_dataframe(db: Session, product_id: int):
         [
             {
                 "ID": int(forecast.id),
+                "Карточка товара": store_product_labels.get(
+                    forecast.store_product_id,
+                    f"Карточка #{forecast.store_product_id}"
+                ),
                 "ID карточки": int(forecast.store_product_id) if forecast.store_product_id else None,
                 "Дата прогноза": forecast.forecast_date.strftime("%d.%m.%Y"),
                 "Прогнозируемая цена": float(forecast.predicted_price),
@@ -264,82 +294,6 @@ def write_dataframe_to_excel(writer, dataframe, sheet_name: str):
     autofit_excel_columns(worksheet)
 
 
-def add_price_chart_to_excel(writer, sheet_name: str):
-    worksheet = writer.sheets[sheet_name]
-
-    if worksheet.max_row < 3:
-        return
-
-    chart = LineChart()
-    chart.title = "История цен"
-    chart.y_axis.title = "Цена, руб."
-    chart.x_axis.title = "Дата"
-
-    chart.y_axis.numFmt = "# ##0"
-    chart.y_axis.delete = False
-    chart.y_axis.tickLblPos = "nextTo"
-    chart.x_axis.tickLblPos = "nextTo"
-
-    data = Reference(
-        worksheet,
-        min_col=2,
-        min_row=1,
-        max_row=worksheet.max_row
-    )
-
-    categories = Reference(
-        worksheet,
-        min_col=3,
-        min_row=2,
-        max_row=worksheet.max_row
-    )
-
-    chart.add_data(data, titles_from_data=True)
-    chart.set_categories(categories)
-    chart.height = 12
-    chart.width = 24
-
-    worksheet.add_chart(chart, "G2")
-
-
-def add_forecast_chart_to_excel(writer, sheet_name: str):
-    worksheet = writer.sheets[sheet_name]
-
-    if worksheet.max_row < 3:
-        return
-
-    chart = LineChart()
-    chart.title = "Прогноз цен"
-    chart.y_axis.title = "Цена, руб."
-    chart.x_axis.title = "Дата"
-
-    chart.y_axis.numFmt = "# ##0"
-    chart.y_axis.delete = False
-    chart.y_axis.tickLblPos = "nextTo"
-    chart.x_axis.tickLblPos = "nextTo"
-
-    data = Reference(
-        worksheet,
-        min_col=4,
-        min_row=1,
-        max_row=worksheet.max_row
-    )
-
-    categories = Reference(
-        worksheet,
-        min_col=3,
-        min_row=2,
-        max_row=worksheet.max_row
-    )
-
-    chart.add_data(data, titles_from_data=True)
-    chart.set_categories(categories)
-    chart.height = 12
-    chart.width = 24
-
-    worksheet.add_chart(chart, "G2")
-
-
 def create_report_record(
     db: Session,
     file_name: str,
@@ -373,7 +327,7 @@ def generate_excel_report(db: Session, product_id: int):
     product_name = safe_filename(product.name)
     created_at_text = get_current_datetime().strftime("%d-%m-%Y_%H-%M-%S")
 
-    file_name = f"Отчёт_{product_name}_{created_at_text}.xlsx"
+    file_name = f"Табличный_отчёт_{product_name}_{created_at_text}.xlsx"
     file_path = os.path.join(REPORTS_DIR, file_name)
 
     prices_df = get_prices_dataframe(db, product_id)
@@ -389,9 +343,6 @@ def generate_excel_report(db: Session, product_id: int):
         write_dataframe_to_excel(writer, correlations_df, "Корреляции")
         write_dataframe_to_excel(writer, forecasts_df, "Прогнозы")
 
-        add_price_chart_to_excel(writer, "История цен")
-        add_forecast_chart_to_excel(writer, "Прогнозы")
-
     return create_report_record(
         db=db,
         file_name=file_name,
@@ -401,8 +352,8 @@ def generate_excel_report(db: Session, product_id: int):
     )
 
 
-def make_temp_png_path():
-    file_descriptor, file_path = tempfile.mkstemp(suffix=".png")
+def make_temp_image_path():
+    file_descriptor, file_path = tempfile.mkstemp(suffix=".jpg")
     os.close(file_descriptor)
     return file_path
 
@@ -440,91 +391,162 @@ def create_price_chart(product: Product, prices_df: pd.DataFrame):
 
     fig.update_layout(
         template="plotly_white",
-        width=1200,
-        height=600,
+        width=REPORT_IMAGE_WIDTH,
+        height=REPORT_IMAGE_HEIGHT,
         xaxis_title="Дата",
         yaxis_title="Цена, руб.",
-        margin=dict(l=80, r=40, t=80, b=80),
+        margin=dict(l=60, r=30, t=70, b=60),
     )
 
     fig.update_xaxes(tickformat="%d.%m.%Y")
     fig.update_yaxes(tickformat=".0f")
 
-    image_path = make_temp_png_path()
-    fig.write_image(image_path)
+    image_path = make_temp_image_path()
+    fig.write_image(
+        image_path,
+        format="jpg",
+        width=REPORT_IMAGE_WIDTH,
+        height=REPORT_IMAGE_HEIGHT,
+        scale=REPORT_IMAGE_SCALE
+    )
 
     return image_path
 
 
-def create_forecast_chart(
+def create_forecast_charts_by_store_product(
     product: Product,
     prices_df: pd.DataFrame,
     forecasts_df: pd.DataFrame
 ):
     if prices_df.empty or forecasts_df.empty:
-        return None
+        return []
 
     history_df = prices_df.copy()
+
     history_df["Дата"] = pd.to_datetime(
         history_df["Дата"],
         format="%d.%m.%Y %H:%M",
         errors="coerce"
     )
-    history_df["Цена"] = normalize_numeric_series(history_df["Цена"])
-    history_df = history_df.dropna(subset=["Дата", "Цена"]).sort_values("Дата")
+
+    history_df["Цена"] = normalize_numeric_series(
+        history_df["Цена"]
+    )
+
+    history_df = history_df.dropna(
+        subset=[
+            "Дата",
+            "Цена",
+            "ID карточки",
+            "Карточка товара"
+        ]
+    ).sort_values("Дата")
 
     forecast_df = forecasts_df.copy()
+
     forecast_df["Дата прогноза"] = pd.to_datetime(
         forecast_df["Дата прогноза"],
         format="%d.%m.%Y",
         errors="coerce"
     )
+
     forecast_df["Прогнозируемая цена"] = normalize_numeric_series(
         forecast_df["Прогнозируемая цена"]
     )
+
     forecast_df = forecast_df.dropna(
-        subset=["Дата прогноза", "Прогнозируемая цена"]
+        subset=[
+            "Дата прогноза",
+            "Прогнозируемая цена",
+            "ID карточки",
+            "Карточка товара"
+        ]
     ).sort_values("Дата прогноза")
 
     if history_df.empty or forecast_df.empty:
-        return None
+        return []
 
-    fig = px.line(
-        history_df,
-        x="Дата",
-        y="Цена",
-        markers=True,
-        title=f"Прогнозирование цены: {product.name}",
-        labels={
-            "Дата": "Дата",
-            "Цена": "Цена, руб."
-        }
+    chart_paths = []
+
+    forecast_store_product_ids = sorted(
+        forecast_df["ID карточки"].dropna().unique().tolist()
     )
 
-    fig.add_scatter(
-        x=forecast_df["Дата прогноза"],
-        y=forecast_df["Прогнозируемая цена"],
-        mode="lines+markers",
-        name="Прогноз",
-        line={"dash": "dash"}
-    )
+    for store_product_id in forecast_store_product_ids:
+        current_history_df = history_df[
+            history_df["ID карточки"] == store_product_id
+        ]
 
-    fig.update_layout(
-        template="plotly_white",
-        width=1200,
-        height=600,
-        xaxis_title="Дата",
-        yaxis_title="Цена, руб.",
-        margin=dict(l=80, r=40, t=80, b=80),
-    )
+        current_forecast_df = forecast_df[
+            forecast_df["ID карточки"] == store_product_id
+        ]
 
-    fig.update_xaxes(tickformat="%d.%m.%Y")
-    fig.update_yaxes(tickformat=".0f")
+        if current_history_df.empty or current_forecast_df.empty:
+            continue
 
-    image_path = make_temp_png_path()
-    fig.write_image(image_path)
+        store_product_label = current_forecast_df[
+            "Карточка товара"
+        ].iloc[0]
 
-    return image_path
+        fig = px.line(
+            current_history_df,
+            x="Дата",
+            y="Цена",
+            markers=True,
+            title=(
+                f"Прогнозирование цены: {product.name}<br>"
+                f"{store_product_label}"
+            ),
+            labels={
+                "Дата": "Дата",
+                "Цена": "Цена, руб."
+            }
+        )
+
+        fig.add_scatter(
+            x=current_forecast_df["Дата прогноза"],
+            y=current_forecast_df["Прогнозируемая цена"],
+            mode="lines+markers",
+            name="Прогноз",
+            line={
+                "dash": "dash"
+            }
+        )
+
+        fig.update_layout(
+            template="plotly_white",
+            width=REPORT_IMAGE_WIDTH,
+            height=REPORT_IMAGE_HEIGHT,
+            xaxis_title="Дата",
+            yaxis_title="Цена, руб.",
+            margin=dict(l=60, r=30, t=70, b=60),
+        )
+
+        fig.update_xaxes(
+            tickformat="%d.%m.%Y"
+        )
+
+        fig.update_yaxes(
+            tickformat=".0f"
+        )
+
+        image_path = make_temp_image_path()
+        fig.write_image(
+            image_path,
+            format="jpg",
+            width=REPORT_IMAGE_WIDTH,
+            height=REPORT_IMAGE_HEIGHT,
+            scale=REPORT_IMAGE_SCALE
+        )
+
+        chart_paths.append(
+            {
+                "title": f"Прогнозирование: {store_product_label}",
+                "path": image_path,
+            }
+        )
+
+    return chart_paths
 
 
 def create_correlation_chart(product: Product, correlations_df: pd.DataFrame):
@@ -587,13 +609,19 @@ def create_correlation_chart(product: Product, correlations_df: pd.DataFrame):
 
     fig.update_layout(
         template="plotly_white",
-        width=1000,
-        height=700,
-        margin=dict(l=80, r=40, t=80, b=80),
+        width=REPORT_IMAGE_WIDTH,
+        height=REPORT_IMAGE_HEIGHT,
+        margin=dict(l=60, r=30, t=70, b=60),
     )
 
-    image_path = make_temp_png_path()
-    fig.write_image(image_path)
+    image_path = make_temp_image_path()
+    fig.write_image(
+        image_path,
+        format="jpg",
+        width=REPORT_IMAGE_WIDTH,
+        height=REPORT_IMAGE_HEIGHT,
+        scale=REPORT_IMAGE_SCALE
+    )
 
     return image_path
 
@@ -631,7 +659,13 @@ def add_table_to_pdf(elements, dataframe, font_name: str):
 
 def add_image_to_pdf(elements, image_path: str):
     if image_path and os.path.exists(image_path):
-        elements.append(Image(image_path, width=720, height=360))
+        elements.append(
+            Image(
+                image_path,
+                width=PDF_IMAGE_WIDTH,
+                height=PDF_IMAGE_HEIGHT
+            )
+        )
         elements.append(Spacer(1, 18))
 
 
@@ -657,7 +691,7 @@ def generate_pdf_report(db: Session, product_id: int):
     product_name = safe_filename(product.name)
     created_at_text = get_current_datetime().strftime("%d-%m-%Y_%H-%M-%S")
 
-    file_name = f"Отчёт_{product_name}_{created_at_text}.pdf"
+    file_name = f"Графический_отчёт_{product_name}_{created_at_text}.pdf"
     file_path = os.path.join(REPORTS_DIR, file_name)
 
     prices_df = get_prices_dataframe(db, product_id)
@@ -670,91 +704,113 @@ def generate_pdf_report(db: Session, product_id: int):
     temp_images = []
 
     try:
-        price_chart = create_price_chart(product, prices_df)
-        forecast_chart = create_forecast_chart(product, prices_df, forecasts_df)
-        correlation_chart = create_correlation_chart(product, correlations_df)
+        forecast_charts = create_forecast_charts_by_store_product(
+            product=product,
+            prices_df=prices_df,
+            forecasts_df=forecasts_df
+        )
+
+        correlation_chart = create_correlation_chart(
+            product=product,
+            correlations_df=correlations_df
+        )
 
         temp_images = [
-            image_path
-            for image_path in [price_chart, forecast_chart, correlation_chart]
-            if image_path
+            chart["path"]
+            for chart in forecast_charts
         ]
 
-        document = SimpleDocTemplate(
-            file_path,
-            pagesize=landscape(A4),
-            rightMargin=25,
-            leftMargin=25,
-            topMargin=25,
-            bottomMargin=25,
-        )
+        if correlation_chart:
+            temp_images.append(correlation_chart)
 
-        styles = getSampleStyleSheet()
-        styles["Title"].fontName = font_name
-        styles["Heading2"].fontName = font_name
-        styles["BodyText"].fontName = font_name
-
-        elements = []
-
-        elements.append(
-            Paragraph(
-                f"Отчёт по товару: {product.name}",
-                styles["Title"]
+            document = SimpleDocTemplate(
+                file_path,
+                pagesize=landscape(A4),
+                rightMargin=25,
+                leftMargin=25,
+                topMargin=25,
+                bottomMargin=25,
             )
-        )
-        elements.append(Spacer(1, 12))
 
-        elements.append(
-            Paragraph(
-                f"Дата формирования отчёта: {get_current_datetime().strftime('%d.%m.%Y %H:%M')}",
-                styles["BodyText"]
+            styles = getSampleStyleSheet()
+            styles["Title"].fontName = font_name
+            styles["Heading2"].fontName = font_name
+            styles["BodyText"].fontName = font_name
+
+            elements = []
+
+            elements.append(
+                Paragraph(
+                    f"Отчёт по товару: {product.name}",
+                    styles["Title"]
+                )
             )
-        )
-        elements.append(Spacer(1, 18))
-
-        chart_sections = [
-            (
-                "График истории цен",
-                price_chart,
-                "Нет данных для построения графика истории цен"
-            ),
-            (
-                "График прогнозирования",
-                forecast_chart,
-                "Нет данных для построения графика прогнозирования"
-            ),
-            (
-                "Матрица корреляций",
-                correlation_chart,
-                "Нет данных для построения матрицы корреляций"
-            ),
-        ]
-
-        for index, (section_title, image_path, empty_text) in enumerate(chart_sections):
-            if index > 0:
-                elements.append(PageBreak())
-
-            elements.append(Paragraph(section_title, styles["Heading2"]))
             elements.append(Spacer(1, 12))
 
-            if image_path:
-                add_image_to_pdf(elements, image_path)
-            else:
-                add_missing_chart_text(elements, empty_text, styles)
-
-        table_sections = [
-            ("История цен", prices_df),
-            ("Выявленные аномалии", anomalies_df),
-            ("Корреляционный анализ", correlations_df),
-            ("Прогнозирование", forecasts_df),
-        ]
-
-        for section_title, dataframe in table_sections:
-            elements.append(PageBreak())
-            elements.append(Paragraph(section_title, styles["Heading2"]))
-            elements.append(Spacer(1, 8))
-            add_table_to_pdf(elements, dataframe, font_name)
+            elements.append(
+                Paragraph(
+                    f"Дата формирования отчёта: {get_current_datetime().strftime('%d.%m.%Y %H:%M')}",
+                    styles["BodyText"]
+                )
+            )
             elements.append(Spacer(1, 18))
+
+            if forecast_charts:
+                for index, chart in enumerate(forecast_charts):
+                    if index > 0:
+                        elements.append(PageBreak())
+
+                    elements.append(
+                        Paragraph(
+                            chart["title"],
+                            styles["Heading2"]
+                        )
+                    )
+
+                    elements.append(Spacer(1, 12))
+
+                    add_image_to_pdf(
+                        elements,
+                        chart["path"]
+                    )
+            else:
+                elements.append(
+                    Paragraph(
+                        "Графики прогнозирования",
+                        styles["Heading2"]
+                    )
+                )
+
+                elements.append(Spacer(1, 12))
+
+                add_missing_chart_text(
+                    elements,
+                    "Нет данных для построения графиков прогнозирования",
+                    styles
+                )
+
+            elements.append(PageBreak())
+
+            elements.append(
+                Paragraph(
+                    "Матрица корреляций",
+                    styles["Heading2"]
+                )
+            )
+
+            elements.append(Spacer(1, 12))
+
+            if correlation_chart:
+                add_image_to_pdf(
+                    elements,
+                    correlation_chart
+                )
+            else:
+                add_missing_chart_text(
+                    elements,
+                    "Нет данных для построения матрицы корреляций",
+                    styles
+                )
 
         document.build(elements)
 

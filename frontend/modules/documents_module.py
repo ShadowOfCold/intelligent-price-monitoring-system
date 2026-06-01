@@ -56,11 +56,15 @@ def render_documents_module():
                 set_local_flash_message("document_upload", "Документ успешно загружен и обработан")
                 st.rerun()
             else:
-                show_api_error(
+                set_api_error(
+                    "document_api_upload",
                     response,
                     "Ошибка загрузки документа"
                 )
 
+                st.rerun()
+
+    show_local_flash_message("document_api_upload")
     show_local_flash_message("document_upload")
 
     st.divider()
@@ -170,11 +174,15 @@ def render_documents_module():
                     )
                     st.rerun()
                 else:
-                    show_api_error(
+                    set_api_error(
+                        "document_api_delete",
                         response,
                         "Ошибка при удалении документа"
                     )
 
+                    st.rerun()
+
+            show_local_flash_message("document_api_delete")
             show_local_flash_message("document_delete")
         else:
             st.info("Документы отсутствуют")

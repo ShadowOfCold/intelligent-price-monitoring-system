@@ -7,6 +7,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 
 from backend.database.database import SessionLocal
+from backend.services.market_factor_service import update_market_factors_from_external_sources
 from backend.services.scheduler_service import run_full_monitoring_cycle
 
 
@@ -33,6 +34,8 @@ DEFAULT_CONFIG = {
     "report_format": "both",
     "last_run_at": None,
     "last_result": None,
+    "last_market_factors_update_at": None,
+    "last_market_factors_result": None,
 }
 
 
@@ -70,9 +73,27 @@ def save_scheduler_config(config: dict) -> dict:
     return config
 
 
+def run_scheduled_market_factors_update():
+    config = load_scheduler_config()
+    db = SessionLocal()
+
+    try:
+        result = update_market_factors_from_external_sources(db=db)
+
+        config["last_market_factors_update_at"] = datetime.now(
+            ZoneInfo("Asia/Irkutsk")
+        ).isoformat()
+
+        config["last_market_factors_result"] = result
+
+        save_scheduler_config(config)
+
+    finally:
+        db.close()
+
+
 def run_scheduled_monitoring_cycle():
     config = load_scheduler_config()
-
     db = SessionLocal()
 
     try:
@@ -90,6 +111,7 @@ def run_scheduled_monitoring_cycle():
         config["last_run_at"] = datetime.now(
             ZoneInfo("Asia/Irkutsk")
         ).isoformat()
+
         config["last_result"] = result
 
         save_scheduler_config(config)
@@ -103,13 +125,39 @@ def clear_scheduler_jobs():
         scheduler.remove_job(job.id)
 
 
-def apply_scheduler_config():
-    config = load_scheduler_config()
+def add_market_factor_jobs():
+    scheduler.add_job(
+        run_scheduled_market_factors_update,
+        trigger=CronTrigger(
+            hour=0,
+            minute=0,
+            timezone="Asia/Irkutsk"
+        ),
+        id="market_factors_update_midnight",
+        replace_existing=True,
+        misfire_grace_time=300,
+        coalesce=True,
+        max_instances=1
+    )
 
-    clear_scheduler_jobs()
+    scheduler.add_job(
+        run_scheduled_market_factors_update,
+        trigger=CronTrigger(
+            hour=12,
+            minute=0,
+            timezone="Asia/Irkutsk"
+        ),
+        id="market_factors_update_noon",
+        replace_existing=True,
+        misfire_grace_time=300,
+        coalesce=True,
+        max_instances=1
+    )
 
+
+def add_monitoring_jobs(config: dict):
     if not config["enabled"]:
-        return config
+        return
 
     for index, run_time in enumerate(config["run_times"]):
         hour, minute = run_time.split(":")
@@ -127,6 +175,15 @@ def apply_scheduler_config():
             coalesce=True,
             max_instances=1
         )
+
+
+def apply_scheduler_config():
+    config = load_scheduler_config()
+
+    clear_scheduler_jobs()
+
+    add_market_factor_jobs()
+    add_monitoring_jobs(config)
 
     return config
 

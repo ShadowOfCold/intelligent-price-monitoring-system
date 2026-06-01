@@ -95,11 +95,15 @@ def render_store_products_module():
                         set_local_flash_message("store_product_create", "Карточка товара успешно добавлена")
                         st.rerun()
                     else:
-                        show_api_error(
+                        set_api_error(
+                            "store_product_api_create",
                             response,
                             "Ошибка при добавлении карточки товара"
                         )
 
+                        st.rerun()
+
+        show_local_flash_message("store_product_api_create")
         show_local_flash_message("store_product_create")
 
     if store_products and products and stores:
@@ -199,11 +203,15 @@ def render_store_products_module():
                         set_local_flash_message("store_product_edit", "Карточка товара успешно обновлена")
                         st.rerun()
                     else:
-                        show_api_error(
+                        set_api_error(
+                            "store_product_api_edit",
                             response,
                             "Ошибка при обновлении карточки товара"
                         )
 
+                        st.rerun()
+
+        show_local_flash_message("store_product_api_edit")
         show_local_flash_message("store_product_edit")
 
         st.divider()
@@ -249,9 +257,13 @@ def render_store_products_module():
                 set_local_flash_message("store_product_delete", "Карточка товара успешно удалена")
                 st.rerun()
             else:
-                show_api_error(
+                set_api_error(
+                    "store_product_api_delete",
                     response,
                     "Ошибка при удалении карточки товара"
                 )
 
+                st.rerun()
+
+        show_local_flash_message("store_product_api_delete")
         show_local_flash_message("store_product_delete")

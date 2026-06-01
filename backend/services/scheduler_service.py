@@ -6,13 +6,23 @@ from backend.models.store_product import StoreProduct
 from backend.services.anomaly_service import detect_anomalies_for_product
 from backend.services.correlation_service import analyze_correlations_for_product
 from backend.services.forecast_service import generate_forecast_for_store_product
+from backend.services.market_factor_service import ensure_actual_market_factors
 from backend.services.price_collection_service import collect_price_for_store_product
 from backend.services.report_service import generate_excel_report, generate_pdf_report
 
 
 def get_store_product_label(store_product: StoreProduct) -> str:
-    product_name = store_product.product.name if store_product.product else f"Товар #{store_product.product_id}"
-    store_name = store_product.store.name if store_product.store else f"Магазин #{store_product.store_id}"
+    product_name = (
+        store_product.product.name
+        if store_product.product
+        else f"Товар #{store_product.product_id}"
+    )
+
+    store_name = (
+        store_product.store.name
+        if store_product.store
+        else f"Магазин #{store_product.store_id}"
+    )
 
     return f"{product_name} — {store_name} (карточка #{store_product.id})"
 
@@ -34,6 +44,10 @@ def run_full_monitoring_cycle(
         "products_total": len(products),
         "store_products_total": len(store_products),
 
+        "market_factors_checked": False,
+        "market_factors_updated": False,
+        "market_factors_result": None,
+
         "prices_expected": len(store_products) if collect_prices else 0,
         "prices_collected": 0,
 
@@ -52,6 +66,20 @@ def run_full_monitoring_cycle(
         "errors": []
     }
 
+    try:
+        market_factors_status = ensure_actual_market_factors(db=db)
+
+        results["market_factors_checked"] = True
+        results["market_factors_updated"] = market_factors_status["updated"]
+        results["market_factors_result"] = market_factors_status
+
+    except Exception as error:
+        db.rollback()
+
+        results["errors"].append(
+            f"Рыночные факторы: {str(error)}"
+        )
+
     forecast_product_ids = set()
 
     if collect_prices:
@@ -66,6 +94,7 @@ def run_full_monitoring_cycle(
 
             except Exception as error:
                 db.rollback()
+
                 results["errors"].append(
                     f"Сбор цен [{get_store_product_label(store_product)}]: {str(error)}"
                 )
@@ -83,6 +112,7 @@ def run_full_monitoring_cycle(
 
             except Exception as error:
                 db.rollback()
+
                 results["errors"].append(
                     f"Аномалии [{product.name}]: {str(error)}"
                 )
@@ -100,6 +130,7 @@ def run_full_monitoring_cycle(
 
             except Exception as error:
                 db.rollback()
+
                 results["errors"].append(
                     f"Корреляции [{product.name}]: {str(error)}"
                 )
@@ -123,6 +154,7 @@ def run_full_monitoring_cycle(
 
             except Exception as error:
                 db.rollback()
+
                 results["errors"].append(
                     f"Прогноз [{get_store_product_label(store_product)}]: {str(error)}"
                 )
@@ -137,6 +169,7 @@ def run_full_monitoring_cycle(
                         db=db,
                         product_id=product.id
                     )
+
                     results["reports_created"] += 1
 
                 if report_format in ("pdf", "both"):
@@ -144,10 +177,12 @@ def run_full_monitoring_cycle(
                         db=db,
                         product_id=product.id
                     )
+
                     results["reports_created"] += 1
 
             except Exception as error:
                 db.rollback()
+
                 results["errors"].append(
                     f"Отчёты [{product.name}]: {str(error)}"
                 )

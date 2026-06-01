@@ -11,7 +11,6 @@ def is_valid_url(value: str) -> bool:
     except Exception:
         return False
 
-
 def show_api_error(response, default_message: str):
     try:
         error_detail = response.json().get("detail", default_message)
@@ -27,6 +26,30 @@ def show_api_success(response, default_message: str):
     except Exception:
         st.success(default_message)
 
+def set_api_error(key: str, response, default_message: str):
+    try:
+        error_detail = response.json().get("detail", default_message)
+    except Exception:
+        error_detail = default_message
+
+    set_local_flash_message(
+        key=key,
+        message=error_detail,
+        message_type="error"
+    )
+
+
+def set_api_success(key: str, response, default_message: str):
+    try:
+        message = response.json().get("message", default_message)
+    except Exception:
+        message = default_message
+
+    set_local_flash_message(
+        key=key,
+        message=message,
+        message_type="success"
+    )
 
 def set_local_flash_message(key: str, message: str, message_type: str = "success"):
     st.session_state[f"{key}_message"] = message

@@ -43,8 +43,10 @@ def render_reports_module():
                     set_local_flash_message("report_create", "Excel-отчёт успешно сформирован")
                     st.rerun()
                 else:
-                    show_api_error(response, "Ошибка при формировании Excel-отчёта")
+                    set_api_error("report_api_create", response, "Ошибка при формировании Excel-отчёта")
+                    st.rerun()
 
+        show_local_flash_message("report_api_create")
         show_local_flash_message("report_create")
 
         with col2:
@@ -58,8 +60,10 @@ def render_reports_module():
                     set_local_flash_message("report_create", "PDF-отчёт успешно сформирован")
                     st.rerun()
                 else:
-                    show_api_error(response, "Ошибка при формировании PDF-отчёта")
+                    set_api_error("report_api_delete", response, "Ошибка при формировании PDF-отчёта")
+                    st.rerun()
 
+        show_local_flash_message("report_api_delete")
         show_local_flash_message("report_delete")
 
     st.divider()
@@ -182,4 +186,9 @@ def render_reports_module():
                 set_local_flash_message("report_delete", "Отчёт успешно удалён")
                 st.rerun()
             else:
-                show_api_error(response, "Ошибка при удалении отчёта")
+                set_api_error("report_api_delete", response, "Ошибка при удалении отчёта")
+
+                st.rerun()
+
+        show_local_flash_message("report_api_delete")
+        show_local_flash_message("report_delete")

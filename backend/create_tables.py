@@ -9,6 +9,9 @@ from backend.models.detected_anomaly import DetectedAnomaly
 from backend.models.price_forecast import PriceForecast
 from backend.models.correlation_analysis_result import CorrelationAnalysisResult
 from backend.models.report import Report
+from backend.models.market_factor import MarketFactor
+from backend.models.category_factor_weight import CategoryFactorWeight
+from backend.models.learned_factor_weight import LearnedFactorWeight
 
 
 Base.metadata.create_all(bind=engine)

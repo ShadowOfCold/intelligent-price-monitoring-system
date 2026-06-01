@@ -52,10 +52,10 @@ create-tables:
 	$(VENV_BIN)/python -m backend.create_tables
 
 backend:
-	$(VENV_BIN)/python -m backend.create_tables
 	$(VENV_BIN)/uvicorn backend.main:app \
 		--host $(API_HOST) \
-		--port $(API_PORT)
+		--port $(API_PORT) \
+		--reload
 
 frontend:
 	$(VENV_BIN)/streamlit run frontend/app.py \

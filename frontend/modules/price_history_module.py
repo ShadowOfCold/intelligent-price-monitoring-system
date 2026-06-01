@@ -46,9 +46,6 @@ def render_price_history_module():
     prices_df = pd.DataFrame(prices)
     prices_df = prepare_price_chart_dataframe(prices_df)
 
-    # -----------------------------
-    # Фильтр по карточке товара
-    # -----------------------------
     store_products = get_store_products()
 
     product_store_products = [
@@ -145,11 +142,15 @@ def render_price_history_module():
                 )
                 st.rerun()
             else:
-                show_api_error(
+                set_api_error(
+                    "price_api_delete",
                     response,
                     "Ошибка при удалении записей цен"
                 )
 
+                st.rerun()
+
+    show_local_flash_message("price_api_delete")
     show_local_flash_message("price_delete")
 
     st.divider()

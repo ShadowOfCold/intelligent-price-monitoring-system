@@ -56,8 +56,10 @@ def render_stores_module():
                     set_local_flash_message("store_create", "Магазин успешно добавлен")
                     st.rerun()
                 else:
-                    show_api_error(response, "Ошибка при добавлении магазина")
+                    set_api_error("store_api_create", response, "Ошибка при добавлении магазина")
+                    st.rerun()
 
+    show_local_flash_message("store_api_create")
     show_local_flash_message("store_create")
 
     if stores:
@@ -107,8 +109,10 @@ def render_stores_module():
                         set_local_flash_message("store_edit", "Магазин успешно обновлён")
                         st.rerun()
                     else:
-                        show_api_error(response, "Ошибка при обновлении магазина")
+                        set_api_error("store_api_edit", response, "Ошибка при обновлении магазина")
+                        st.rerun()
 
+        show_local_flash_message("store_api_edit")
         show_local_flash_message("store_edit")
 
         st.divider()
@@ -142,6 +146,8 @@ def render_stores_module():
                 set_local_flash_message("store_delete", "Магазин успешно удалён")
                 st.rerun()
             else:
-                show_api_error(response, "Ошибка при удалении магазина")
+                set_api_error("store_api_delete", response, "Ошибка при удалении магазина")
+                st.rerun()
 
+        show_local_flash_message("store_api_delete")
         show_local_flash_message("store_delete")
